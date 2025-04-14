@@ -17,9 +17,9 @@ from src.markdown_export import write_markdown_digest
 from src.config import config
 
 # Configure logging
-import structlog
+from src.logging_config import setup_logging
 
-logger = structlog.get_logger()
+logger = setup_logging()
 
 # Check if analyzer is initialized
 if "analyzer" not in st.session_state:
@@ -136,12 +136,16 @@ if cluster_complete and analyzer.reduced_embeddings is not None and analyzer.clu
 
             # Show first user message as preview
             for node in convo.get("mapping", {}).values():
-                if node.get("message", {}).get("author", {}).get("role") == "user":
-                    content = node.get("message", {}).get("content", {}).get("parts", [""])[0]
-                    if content:
-                        st.write("First message preview:")
-                        st.write(content[:200] + "..." if len(content) > 200 else content)
-                        break
+                if isinstance(node, dict):
+                    msg = node.get("message")
+                    if isinstance(msg, dict):
+                        author = msg.get("author", {})
+                        if author.get("role") == "user":
+                            content = msg.get("content", {}).get("parts", [""])[0]
+                            if content:
+                                st.write("First message preview:")
+                                st.write(content[:200] + "..." if len(content) > 200 else content)
+                                break
 
     # Export option
     if st.button("Export Cluster as Markdown"):

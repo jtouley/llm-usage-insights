@@ -13,16 +13,9 @@ from src.analysis import ChatAnalyzer
 from src.config import config
 
 # Configure logging
-import structlog
+from src.logging_config import setup_logging
 
-structlog.configure(
-    processors=[
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(),
-    ]
-)
-logger = structlog.get_logger()
+logger = setup_logging()
 
 # Set page config
 st.set_page_config(
@@ -70,7 +63,7 @@ if "analyzer" not in st.session_state:
                 st.session_state.analyzer.analyze_effectiveness()
 
                 # Rerun to show the dashboard
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 st.error(f"Error loading data: {e}")
                 logger.exception(f"Error loading data: {e}")
@@ -83,7 +76,7 @@ if "analyzer" not in st.session_state:
                     st.session_state.analyzer = ChatAnalyzer(data_path)
                     st.session_state.analyzer.analyze_keywords()
                     st.session_state.analyzer.analyze_effectiveness()
-                    st.experimental_rerun()
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error loading saved data: {e}")
                     logger.exception(f"Error loading saved data: {e}")
@@ -243,6 +236,6 @@ st.markdown(
 st.markdown(
     """
 ---
-Built with ❤️ using Streamlit and Python. [GitHub Repository](https://github.com/yourusername/chat-insights-poc)
+Built with ❤️ using Streamlit and Python. [GitHub Repository](https://github.com/jtouley/llm-usage-insights)
 """
 )

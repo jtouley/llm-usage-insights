@@ -145,7 +145,7 @@ class ChatAnalyzer:
 
         # Aggregate by time period
         daily_counts = time_df.resample(freq).count()["conversation_id"]
-        daily_prompts = time_df.resample(freq).sum()["prompt_count"]
+        daily_prompts = time_df["prompt_count"].resample(freq).sum()
 
         # Create result dataframe
         result = pd.DataFrame({"conversation_count": daily_counts, "prompt_count": daily_prompts})

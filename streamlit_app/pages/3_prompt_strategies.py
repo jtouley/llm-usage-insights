@@ -13,9 +13,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 # Import local modules
 
 # Configure logging
-import structlog
+from src.logging_config import setup_logging
 
-logger = structlog.get_logger()
+logger = setup_logging()
 
 st.set_page_config(
     page_title="Prompt Strategies - OpenAI Chat Insights",
