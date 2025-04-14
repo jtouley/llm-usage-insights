@@ -1,0 +1,20 @@
+[flake8]
+max-line-length = 100
+exclude = .git,__pycache__,build,dist,venv
+ignore =
+    # Allow block comments with multiple #
+    E266,
+    # Allow missing whitespace around operators
+    E226,
+    # Allow missing whitespace after colons
+    E231,
+    # Allow multiple spaces before operators
+    E221,
+    # Allow import not at top of file (for Streamlit path manipulation)
+    E402,
+    # Allow multiple spaces after colons
+    E241,
+    # Allow long lines for readability
+    E501,
+    # Allow line break before binary operator
+    W503
