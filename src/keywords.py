@@ -24,7 +24,7 @@ def extract_top_keywords(titles: pd.Series, top_n: int = 10) -> pd.Series:
     vectorizer = CountVectorizer(
         stop_words="english",
         max_features=100,
-        min_df=2,
+        min_df=1,
         token_pattern=r"\b[a-zA-Z]{3,}\b",
     )
 

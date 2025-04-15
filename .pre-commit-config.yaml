@@ -19,3 +19,14 @@ repos:
     hooks:
     -   id: black
         args: [--line-length=100]
+
+-   repo: https://github.com/PyCQA/autoflake
+    rev: v2.2.1
+    hooks:
+    -   id: autoflake
+        args:
+        - --in-place
+        - --remove-all-unused-imports
+        - --recursive
+        - src/
+        - streamlit_app/

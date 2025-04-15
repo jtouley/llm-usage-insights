@@ -7,11 +7,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import datetime
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 # Import local modules
+from src.config import config
 
 # Configure logging
 from src.logging_config import setup_logging
@@ -92,6 +94,179 @@ ax.set_xlabel("Month")
 ax.set_ylabel("Average Effectiveness Score")
 ax.grid(True, alpha=0.3)
 st.pyplot(fig)
+
+# Effectiveness by time period
+st.header("Effectiveness by Time Period")
+
+# Time frame selection
+col1, col2 = st.columns(2)
+with col1:
+    selected_timeframe = st.selectbox(
+        "Select time frame",
+        options=list(config.time_frames.keys()),
+        format_func=lambda x: config.time_frames[x],
+        index=list(config.time_frames.keys()).index("M"),
+    )
+
+# Get time-segmented effectiveness data
+time_eff_df = analyzer.get_time_segmented_analysis(selected_timeframe, "effectiveness")
+
+if not time_eff_df.empty:
+    # Display time-segmented effectiveness
+    fig, ax = plt.subplots(figsize=(10, 6))
+    time_eff_df.plot(kind="bar", ax=ax)
+    ax.set_title(f"Average Effectiveness by {config.time_frames[selected_timeframe]}")
+    ax.set_ylabel("Average Effectiveness Score")
+    ax.grid(True, alpha=0.3)
+    st.pyplot(fig)
+
+    # Find the most effective period
+    most_effective_period = time_eff_df["effectiveness"].idxmax()
+    highest_score = time_eff_df.loc[most_effective_period, "effectiveness"]
+
+    st.write(
+        f"Your most effective {config.time_frames[selected_timeframe].lower()} was "
+        + f"{most_effective_period} with an average score of {highest_score:.2f}."
+    )
+
+    # Allow comparison between periods
+    st.subheader("Compare Effectiveness Between Periods")
+
+    # Get all periods
+    periods = time_eff_df.index.tolist()
+
+    if len(periods) >= 2:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            period1 = st.selectbox(
+                "Select first period",
+                options=periods,
+                format_func=lambda p: p.strftime("%b %Y") if hasattr(p, "strftime") else str(p),
+                index=len(periods) - 1,  # Default to most recent
+            )
+
+        with col2:
+            period2 = st.selectbox(
+                "Select second period",
+                options=periods,
+                format_func=lambda p: p.strftime("%b %Y") if hasattr(p, "strftime") else str(p),
+                index=max(0, len(periods) - 2),  # Default to second most recent
+            )
+
+        if period1 != period2:
+            # Get effectiveness data for both periods
+            score1 = time_eff_df.loc[period1, "effectiveness"]
+            score2 = time_eff_df.loc[period2, "effectiveness"]
+
+            # Calculate percent change
+            percent_change = (score1 - score2) / score2 * 100
+
+            # Display comparison
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric(label=f"{period1}", value=f"{score1:.2f}")
+
+            with col2:
+                st.metric(label=f"{period2}", value=f"{score2:.2f}")
+
+            with col3:
+                st.metric(
+                    label="Change", value=f"{percent_change:.1f}%", delta=f"{percent_change:.1f}%"
+                )
+
+            # Get the most effective conversations from both periods
+            st.subheader("Top Conversations Comparison")
+
+            # Get conversations from each period
+            period1_convos = []
+            period2_convos = []
+
+        def period_to_datetime_range(period):
+            """Convert a time period to a datetime range.
+
+            Args:
+                period: Time period object (pd.Period, datetime.date, datetime.datetime, or year integer)
+
+            Returns:
+                tuple: (start_datetime, end_datetime) representing the period's full range
+            """
+            if isinstance(period, pd.Period):
+                return period.start_time, period.end_time
+            elif isinstance(period, (datetime.date, datetime.datetime)):
+                return (
+                    datetime.datetime.combine(period, datetime.time.min),
+                    datetime.datetime.combine(period, datetime.time.max),
+                )
+            else:
+                # For yearly periods
+                year = int(period)
+                return (
+                    datetime.datetime(year, 1, 1),
+                    datetime.datetime(year, 12, 31, 23, 59, 59),
+                )
+
+            # Get date ranges
+            start1, end1 = period_to_datetime_range(period1)
+            start2, end2 = period_to_datetime_range(period2)
+
+            # Get effectiveness scores and filter by date
+            period1_scores = {}
+            period2_scores = {}
+
+            for conv_id, score in analyzer.effectiveness_scores.items():
+                for convo in analyzer.conversations:
+                    if convo.get("conversation_id") == conv_id:
+                        create_time = convo.get("create_time")
+                        if create_time:
+                            convo_date = datetime.datetime.fromtimestamp(create_time)
+                            if start1 <= convo_date <= end1:
+                                period1_scores[conv_id] = (score, convo.get("title", "Untitled"))
+                            elif start2 <= convo_date <= end2:
+                                period2_scores[conv_id] = (score, convo.get("title", "Untitled"))
+
+            # Create dataframes for top conversations
+            if period1_scores and period2_scores:
+                period1_top = (
+                    pd.DataFrame(
+                        [
+                            {"conv_id": k, "score": v[0], "title": v[1]}
+                            for k, v in period1_scores.items()
+                        ]
+                    )
+                    .sort_values("score", ascending=False)
+                    .head(5)
+                )
+
+                period2_top = (
+                    pd.DataFrame(
+                        [
+                            {"conv_id": k, "score": v[0], "title": v[1]}
+                            for k, v in period2_scores.items()
+                        ]
+                    )
+                    .sort_values("score", ascending=False)
+                    .head(5)
+                )
+
+                # Display side by side
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.write(f"Top Conversations in {period1}")
+                    for _, row in period1_top.iterrows():
+                        st.write(f"• {row['title']} ({row['score']:.2f})")
+
+                with col2:
+                    st.write(f"Top Conversations in {period2}")
+                    for _, row in period2_top.iterrows():
+                        st.write(f"• {row['title']} ({row['score']:.2f})")
+            else:
+                st.info("Not enough effectiveness data for both periods.")
+
+else:
+    st.info("Not enough data for time-segmented effectiveness analysis.")
 
 # Effectiveness by category/topic
 st.header("Effectiveness by Topic")

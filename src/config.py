@@ -23,6 +23,9 @@ class Config:
     clustering_threshold: float = 0.3
     time_aggregation: str = "W"  # Weekly
 
+    # Time frame options
+    time_frames: dict = None
+
     # Effectiveness scoring weights
     code_weight: float = 0.5
     action_weight: float = 0.3
@@ -44,6 +47,15 @@ class Config:
                 "generate",
                 "analyze",
             ]
+
+        if self.time_frames is None:
+            self.time_frames = {
+                "Y": "Yearly",
+                "Q": "Quarterly",
+                "M": "Monthly",
+                "W": "Weekly",
+                "D": "Daily",
+            }
 
         # Create directories if they don't exist
         os.makedirs(self.data_dir, exist_ok=True)

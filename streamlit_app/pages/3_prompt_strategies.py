@@ -11,6 +11,7 @@ import seaborn as sns
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 # Import local modules
+from src.config import config
 
 # Configure logging
 from src.logging_config import setup_logging
@@ -213,6 +214,156 @@ with style_tabs[2]:  # Style Trends
     """
     )
 
+# Prompt length by time period
+st.header("Prompt Length by Time Period")
+
+# Time frame selection
+selected_timeframe = st.selectbox(
+    "Select time frame",
+    options=list(config.time_frames.keys()),
+    format_func=lambda x: config.time_frames[x],
+    index=list(config.time_frames.keys()).index("M"),
+    key="prompt_length_timeframe",
+)
+
+# Group by selected time frame and calculate average words per prompt
+interaction_df["time_period"] = pd.NA
+
+# Create time periods based on frequency
+if selected_timeframe == "Y":
+    interaction_df["time_period"] = interaction_df["create_time"].dt.year
+elif selected_timeframe == "Q":
+    interaction_df["time_period"] = interaction_df["create_time"].dt.to_period("Q")
+elif selected_timeframe == "M":
+    interaction_df["time_period"] = interaction_df["create_time"].dt.to_period("M")
+elif selected_timeframe == "W":
+    interaction_df["time_period"] = interaction_df["create_time"].dt.to_period("W")
+elif selected_timeframe == "D":
+    interaction_df["time_period"] = interaction_df["create_time"].dt.date
+
+# Calculate average words per timeframe
+timeframe_words = interaction_df.groupby("time_period")["avg_words"].mean().reset_index()
+
+# Sort by time period
+if hasattr(timeframe_words["time_period"].iloc[0], "to_timestamp"):
+    timeframe_words = timeframe_words.sort_values("time_period")
+else:
+    timeframe_words = timeframe_words.sort_values("time_period")
+
+fig, ax = plt.subplots(figsize=(10, 6))
+if not timeframe_words.empty:
+    # Convert period to string for better x-axis labels if needed
+    if hasattr(timeframe_words["time_period"].iloc[0], "strftime"):
+        timeframe_words["period_str"] = timeframe_words["time_period"].apply(
+            lambda x: x.strftime("%Y-%m") if isinstance(x, pd.Period) else str(x)
+        )
+        sns.barplot(x="period_str", y="avg_words", data=timeframe_words, ax=ax)
+    else:
+        sns.barplot(x="time_period", y="avg_words", data=timeframe_words, ax=ax)
+
+    ax.set_title(f"Average Words per Prompt by {config.time_frames[selected_timeframe]}")
+    ax.set_xlabel(config.time_frames[selected_timeframe])
+    ax.set_ylabel("Average Words per Prompt")
+    plt.xticks(rotation=45)
+    ax.grid(True, alpha=0.3)
+    st.pyplot(fig)
+
+# Add interaction style analysis by time period after the existing style tabs
+st.header("Interaction Style Trends by Time Period")
+
+# Time frame selection
+selected_style_timeframe = st.selectbox(
+    "Select time frame for style analysis",
+    options=list(config.time_frames.keys()),
+    format_func=lambda x: config.time_frames[x],
+    index=list(config.time_frames.keys()).index("M"),
+    key="style_timeframe",
+)
+
+# Create time periods for style analysis
+interaction_df["style_period"] = pd.NA
+
+# Create time periods based on frequency
+if selected_style_timeframe == "Y":
+    interaction_df["style_period"] = interaction_df["create_time"].dt.year
+elif selected_style_timeframe == "Q":
+    interaction_df["style_period"] = interaction_df["create_time"].dt.to_period("Q")
+elif selected_style_timeframe == "M":
+    interaction_df["style_period"] = interaction_df["create_time"].dt.to_period("M")
+elif selected_style_timeframe == "W":
+    interaction_df["style_period"] = interaction_df["create_time"].dt.to_period("W")
+elif selected_style_timeframe == "D":
+    interaction_df["style_period"] = interaction_df["create_time"].dt.date
+
+# Calculate average style metrics by time period
+style_by_period = (
+    interaction_df.groupby("style_period")
+    .agg(
+        {
+            "instruction_ratio": "mean",
+            "question_ratio": "mean",
+            "conversational_ratio": "mean",
+            "technical_ratio": "mean",
+        }
+    )
+    .reset_index()
+)
+
+# Sort by time period
+if hasattr(style_by_period["style_period"].iloc[0], "to_timestamp"):
+    style_by_period = style_by_period.sort_values("style_period")
+else:
+    style_by_period = style_by_period.sort_values("style_period")
+
+# Create a melted version for easier plotting
+style_melted = pd.melt(
+    style_by_period,
+    id_vars=["style_period"],
+    value_vars=["instruction_ratio", "question_ratio", "conversational_ratio", "technical_ratio"],
+    var_name="style_type",
+    value_name="ratio",
+)
+
+# Convert period to string for better x-axis labels if needed
+if hasattr(style_melted["style_period"].iloc[0], "strftime"):
+    style_melted["period_str"] = style_melted["style_period"].apply(
+        lambda x: x.strftime("%Y-%m") if isinstance(x, pd.Period) else str(x)
+    )
+    period_col = "period_str"
+else:
+    period_col = "style_period"
+
+# Create faceted plot for style trends
+style_types = {
+    "instruction_ratio": "Instruction",
+    "question_ratio": "Question",
+    "conversational_ratio": "Conversational",
+    "technical_ratio": "Technical",
+}
+
+# Allow selecting style type
+selected_style_type = st.selectbox(
+    "Select style type to visualize",
+    options=list(style_types.keys()),
+    format_func=lambda x: style_types[x],
+)
+
+# Filter for selected style
+style_filtered = style_melted[style_melted["style_type"] == selected_style_type]
+
+# Plot selected style trend
+fig, ax = plt.subplots(figsize=(10, 6))
+if not style_filtered.empty:
+    sns.barplot(x=period_col, y="ratio", data=style_filtered, ax=ax)
+    ax.set_title(
+        f"{style_types[selected_style_type]} Style Trend by {config.time_frames[selected_style_timeframe]}"
+    )
+    ax.set_xlabel(config.time_frames[selected_style_timeframe])
+    ax.set_ylabel(f"{style_types[selected_style_type]} Ratio")
+    plt.xticks(rotation=45)
+    ax.grid(True, alpha=0.3)
+    st.pyplot(fig)
+
 # Effectiveness correlation
 st.header("Prompt Strategies vs. Effectiveness")
 
@@ -228,6 +379,77 @@ if analyzer.effectiveness_scores:
 
     # Merge with interaction styles
     merged_df = pd.merge(interaction_df, scores_df, on="conversation_id", how="inner")
+
+# If effectiveness scores are available, add time-based effectiveness analysis
+if "effectiveness" in merged_df.columns:
+    st.header("Effectiveness vs Style by Time Period")
+
+    # Add time period to merged df
+    merged_df["time_period"] = pd.NA
+
+    # Create time periods based on frequency
+    if selected_style_timeframe == "Y":
+        merged_df["time_period"] = merged_df["create_time"].dt.year
+    elif selected_style_timeframe == "Q":
+        merged_df["time_period"] = merged_df["create_time"].dt.to_period("Q")
+    elif selected_style_timeframe == "M":
+        merged_df["time_period"] = merged_df["create_time"].dt.to_period("M")
+    elif selected_style_timeframe == "W":
+        merged_df["time_period"] = merged_df["create_time"].dt.to_period("W")
+    elif selected_style_timeframe == "D":
+        merged_df["time_period"] = merged_df["create_time"].dt.date
+
+    # Calculate correlation by time period
+    time_periods = merged_df["time_period"].dropna().unique()
+
+    if len(time_periods) > 1:
+        # Allow selecting specific period
+        selected_period = st.selectbox(
+            "Select time period to analyze",
+            options=sorted(time_periods),
+            format_func=lambda p: p.strftime("%Y-%m") if hasattr(p, "strftime") else str(p),
+        )
+
+        # Filter data for selected period
+        period_data = merged_df[merged_df["time_period"] == selected_period]
+
+        # Calculate correlation for selected period
+        corr_columns = [
+            "avg_words",
+            "instruction_ratio",
+            "question_ratio",
+            "conversational_ratio",
+            "technical_ratio",
+            "effectiveness",
+        ]
+
+        period_corr = period_data[corr_columns].corr()
+
+        # Show correlation heatmap
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(period_corr, annot=True, cmap="coolwarm", vmin=-1, vmax=1, ax=ax)
+        ax.set_title(f"Correlation in {selected_period}")
+        st.pyplot(fig)
+
+        # Show effectiveness correlation for selected period
+        st.subheader(f"Most Effective Prompt Strategies in {selected_period}")
+
+        # Get effectiveness correlations
+        eff_corr = period_corr["effectiveness"].drop("effectiveness").sort_values(ascending=False)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Positive correlations
+            st.write("**Strategies that improve effectiveness:**")
+            for strategy, corr in eff_corr[eff_corr > 0.1].items():
+                st.write(f"- **{strategy}**: {corr:.2f} correlation")
+
+        with col2:
+            # Negative correlations
+            st.write("**Strategies that reduce effectiveness:**")
+            for strategy, corr in eff_corr[eff_corr < -0.1].items():
+                st.write(f"- **{strategy}**: {corr:.2f} correlation")
 
     # Create correlation heatmap
     st.subheader("Correlation Between Prompt Strategies and Effectiveness")

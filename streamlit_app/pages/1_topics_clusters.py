@@ -161,3 +161,124 @@ if cluster_complete and analyzer.reduced_embeddings is not None and analyzer.clu
             logger.exception(f"Error exporting cluster: {e}")
 else:
     st.info("Run the clustering analysis to visualize conversation clusters.")
+
+# Check if time-based topic analysis is available
+st.header("Topics by Time Period")
+
+# Time frame selection
+col1, col2 = st.columns(2)
+with col1:
+    selected_timeframe = st.selectbox(
+        "Select time frame for topic analysis",
+        options=list(config.time_frames.keys()),
+        format_func=lambda x: config.time_frames[x],
+        index=list(config.time_frames.keys()).index("M"),
+    )
+
+# Generate topics by time period
+topics_by_time = analyzer.get_topics_by_timeframe(selected_timeframe, 10)
+
+if topics_by_time:
+    # Get the periods in chronological order
+    periods = sorted(topics_by_time.keys())
+
+    # Allow user to select a specific period
+    selected_period = st.selectbox(
+        "Select time period",
+        options=periods,
+        format_func=lambda p: p.strftime("%b %Y") if isinstance(p, pd.Period) else str(p),
+        index=len(periods) - 1,  # Default to most recent
+    )
+
+    if selected_period in topics_by_time:
+        st.subheader(f"Top Topics in {selected_period}")
+
+        # Display topic bar chart for selected period
+        period_topics = topics_by_time[selected_period]
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(x=period_topics.values, y=period_topics.index, ax=ax)
+        ax.set_title(f"Top Topics in {selected_period}")
+        ax.set_xlabel("Count")
+        st.pyplot(fig)
+
+        # Get conversations from this period
+        period_convos = []
+
+        # Convert period to datetime range for filtering
+        if isinstance(selected_period, pd.Period):
+            start_date = selected_period.start_time
+            end_date = selected_period.end_time
+        elif isinstance(selected_period, (datetime.date, datetime.datetime)):
+            start_date = datetime.datetime.combine(selected_period, datetime.time.min)
+            end_date = datetime.datetime.combine(selected_period, datetime.time.max)
+        else:
+            # For yearly periods
+            year = int(selected_period)
+            start_date = datetime.datetime(year, 1, 1)
+            end_date = datetime.datetime(year, 12, 31, 23, 59, 59)
+
+        # Filter conversations by date
+        for convo in analyzer.conversations:
+            create_time = convo.get("create_time")
+            if create_time:
+                convo_date = datetime.fromtimestamp(create_time)
+                if start_date <= convo_date <= end_date:
+                    period_convos.append(convo)
+
+        st.write(f"Found {len(period_convos)} conversations in this period.")
+
+        # Show sample conversations from this period
+        if period_convos:
+            st.subheader(f"Sample Conversations in {selected_period}")
+
+            # Sort by create_time
+            period_convos = sorted(
+                period_convos, key=lambda x: x.get("create_time", 0), reverse=True
+            )
+
+            # Show top 10 conversations
+            for i, convo in enumerate(period_convos[:10]):
+                title = convo.get("title", "Untitled")
+                with st.expander(f"{i+1}. {title}"):
+                    # Show creation date
+                    create_time = convo.get("create_time")
+                    if create_time:
+                        st.write(
+                            f"Created: {datetime.datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S')}"
+                        )
+
+                    # Show conversation preview
+                    st.write("Preview of first message:")
+                    for node in convo.get("mapping", {}).values():
+                        if isinstance(node, dict):
+                            role = node.get("message", {}).get("author", {}).get("role")
+                            if role == "user":
+                                content = (
+                                    node.get("message", {}).get("content", {}).get("parts", [""])[0]
+                                )
+                                if content:
+                                    st.write(
+                                        content[:300] + "..." if len(content) > 300 else content
+                                    )
+                                    break
+
+            # Export option
+            if st.button(f"Export {selected_period} Conversations as Markdown"):
+                try:
+                    # Format the period string for filename
+                    if isinstance(selected_period, pd.Period):
+                        period_str = selected_period.strftime("%Y-%m")
+                    else:
+                        period_str = str(selected_period)
+
+                    export_path = write_markdown_digest(
+                        f"period_{period_str}",
+                        period_convos,
+                        os.path.join(config.export_dir, "time_periods"),
+                    )
+                    st.success(f"Exported to {export_path}")
+                except Exception as e:
+                    st.error(f"Error exporting conversations: {e}")
+                    logger.exception(f"Error exporting conversations: {e}")
+else:
+    st.info("Not enough data for time-based topic analysis with the selected time frame.")
